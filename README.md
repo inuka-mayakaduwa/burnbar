@@ -7,6 +7,7 @@
 [![Build](https://github.com/nooblk-98/burnbar/actions/workflows/build.yml/badge.svg)](https://github.com/nooblk-98/burnbar/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/nooblk-98/burnbar?include_prereleases&label=release)](https://github.com/nooblk-98/burnbar/releases)
 [![Go](https://img.shields.io/github/go-mod/go-version/nooblk-98/burnbar)](go.mod)
+[![Rust](https://img.shields.io/badge/rust-1.80%2B-DEA584?logo=rust)](rust/README.md)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4)](#installation)
 [![License](https://img.shields.io/github/license/nooblk-98/burnbar)](LICENSE)
 
@@ -198,6 +199,29 @@ The executable also accepts a few flags for development:
 > Local builds and release builds are unsigned, so Windows **Smart App Control** may block them.
 > See [Releasing BurnBar](docs/RELEASING.md) for the release process.
 
+## Cross-platform Rust app (Tauri)
+
+The repository now also contains a single Rust implementation that builds for
+**Windows, macOS and Linux** from one codebase. The portable logic lives in
+`rust/crates/burnbar-core` (usage providers, config, history, alerts, insights,
+updates) and the tray shell is a Tauri 2 app in `rust/apps/desktop`. There are no
+per-platform app variants: the same tray menu, commands and HTML/CSS/JS interface
+run everywhere.
+
+```bash
+cd rust
+cargo run -p burnbar-desktop -- --demo   # sample data, no sign-in needed
+cargo test --workspace                   # unit + mock-HTTP integration tests
+```
+
+The Rust app reads the same profile files as the Go app, so existing settings and
+history carry over. The port was planned with
+[rust-anything](https://github.com/erkamyaman/rust-anything); see
+[rust/MIGRATION.md](rust/MIGRATION.md) for the unit mapping and
+[rust/DECISIONS.md](rust/DECISIONS.md) for the architecture decisions. The Go
+build above remains the current packaged Windows release until the Rust build has
+been signed off on each platform.
+
 <details>
 <summary><strong>Project layout</strong></summary>
 
@@ -213,6 +237,7 @@ internal/insights/    local data health and conservative recent-pace estimates
 internal/updates/     public stable-release checks (no automatic installation)
 internal/history/     usage history for the charts
 tools/genres/         icon and Windows resource generator
+rust/                 cross-platform Rust core + Tauri desktop app
 assets/               app icon
 docs/                 screenshots and release guide
 .github/workflows/    CI, GitHub releases and optional winget publishing

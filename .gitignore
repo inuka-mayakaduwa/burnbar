@@ -28,3 +28,7 @@ desktop.ini
 # npm packaging and dependencies
 node_modules/
 *.tgz
+
+# Rust / Tauri build output
+/rust/target/
+/rust/apps/desktop/gen/

@@ -3,6 +3,19 @@
 This document describes BurnBar's own behavior in the current source code.
 Provider CLIs and services have their own settings and policies.
 
+## Rust/Tauri build
+
+The cross-platform app in [`rust/`](rust/README.md) follows the same data-access
+rules described below: it reads Claude Code's stored credential file without
+modifying it, asks the local Codex CLI for account limits, sends no telemetry and
+checks updates from public release metadata only. Settings and history live in
+the platform's user config folder — `%APPDATA%\BurnBar` on Windows,
+`~/Library/Application Support/BurnBar` on macOS and
+`$XDG_CONFIG_HOME/BurnBar` (usually `~/.config/BurnBar`) on Linux — or in
+`BURNBAR_HOME` when that variable is set. It does not implement the
+Windows-specific focus/fullscreen inspection described below; notifications are
+left to the operating system's own quiet-time rules.
+
 ## npx installation
 
 The npx command downloads the installer package through npm (or GitHub when using
