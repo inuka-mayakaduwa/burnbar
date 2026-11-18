@@ -47,6 +47,28 @@ function providerName(provider) {
   return { codex: "Codex", opencode: "OpenCode", cursor: "Cursor" }[provider] || "Claude";
 }
 
+// Brand marks live in ui/logos. Marks with light/dark variants swap with the theme;
+// the mono OpenCode mark is a CSS mask so it follows the text colour.
+const LOGOS = {
+  claude: ["claude.svg"],
+  codex: ["codex-light.svg", "codex-dark.svg"],
+  cursor: ["cursor-light.svg", "cursor-dark.svg"],
+  opencode: [],
+};
+
+function providerLogo(provider) {
+  const key = LOGOS[provider] ? provider : "claude";
+  const [light, dark] = LOGOS[key];
+  const name = providerName(provider);
+  const badge = el("span", { class: `provider-logo provider-logo-${key}`, role: "img", "aria-label": name, title: name });
+  if (light && dark) {
+    badge.append(el("img", { class: "logo-light", src: `logos/${light}`, alt: "" }), el("img", { class: "logo-dark", src: `logos/${dark}`, alt: "" }));
+  } else if (light) {
+    badge.append(el("img", { src: `logos/${light}`, alt: "" }));
+  }
+  return badge;
+}
+
 function percent(value) {
   return typeof value === "number" && !Number.isNaN(value) ? `${Math.round(value)}%` : "–";
 }
@@ -101,8 +123,8 @@ function compactProvider(view) {
   const provider = usage.provider || view.provider;
   const windows = [usage.fiveHour, usage.sevenDay].filter(Boolean);
   const body = [el("header", { class: "compact-provider-head" }, [
-    el("strong", { text: providerName(provider) }),
-    usage.err && windows.length ? el("span", { class: "compact-warning", text: "Stale" }) : null,
+    providerLogo(provider),
+    usage.err && windows.length ? el("span", { class: "compact-warning", title: "Stale · last refresh failed", "aria-label": "Stale" }) : null,
   ])];
   if (windows.length) body.push(...windows.map(compactMeter));
   else body.push(el("p", { class: "compact-error", text: usage.err ? "Unavailable · sign in, then refresh" : "Waiting for the first reading…" }));
