@@ -60,6 +60,31 @@ Documentation-only changes need a review of links, examples, and formatting.
 Use demo mode for public screenshots. Never commit credentials, personal usage
 responses, session logs, or account identifiers. See [PRIVACY.md](PRIVACY.md).
 
+## Cross-platform Rust app
+
+The Tauri implementation in `rust/` is the cross-platform rewrite. The portable
+domain logic belongs in `rust/crates/burnbar-core`; windows, trays, notifications
+and commands belong in `rust/apps/desktop`. Do not add a platform-specific copy of
+a feature: use a Tauri API or plugin so Windows, macOS and Linux share the code.
+
+```bash
+cd rust
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+cargo run -p burnbar-desktop -- --demo
+```
+
+On Linux install `libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev` and
+`librsvg2-dev` first. For headless smoke tests use
+`xvfb-run -a dbus-run-session -- ./target/debug/burnbar --demo`. Keep the
+`config.json` and `history*.jsonl` formats compatible with the Go app, and add a
+test when changing parsing, milestones, quiet hours or forecasts. Architecture
+notes and the unit map are in [`rust/README.md`](rust/README.md),
+[`rust/DECISIONS.md`](rust/DECISIONS.md) and [`rust/MAP.md`](rust/MAP.md); the
+port was planned with [rust-anything](https://github.com/erkamyaman/rust-anything)
+(`.mcp.json` registers its MCP server).
+
 ## Add an AI tool integration
 
 Start with a [provider request](https://github.com/nooblk-98/burnbar/issues/new?template=02-ai-tool-request.yml)

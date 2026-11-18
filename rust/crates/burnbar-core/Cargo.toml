@@ -1,0 +1,18 @@
+[package]
+name = "burnbar-core"
+description = "Portable BurnBar domain logic: usage providers, config, history, alerts and insights"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+chrono.workspace = true
+dirs.workspace = true
+glob.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
