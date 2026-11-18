@@ -10,6 +10,7 @@ use burnbar_core::service::{RefreshReport, Service, Settings};
 use burnbar_core::{updates, UiState};
 use chrono::Utc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc;
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
@@ -27,6 +28,7 @@ pub struct AppState {
     /// ignored when the token no longer matches.
     popup_token: AtomicU64,
     milestones_item: Mutex<Option<CheckMenuItem<tauri::Wry>>>,
+    scheduler_wake: Mutex<Option<mpsc::SyncSender<()>>>,
 }
 
 impl AppState {
@@ -141,6 +143,7 @@ fn setup(
         service: Mutex::new(service),
         popup_token: AtomicU64::new(0),
         milestones_item: Mutex::new(None),
+        scheduler_wake: Mutex::new(None),
     });
 
     build_tray(app, milestones)?;
@@ -402,13 +405,14 @@ fn refresh(app: &AppHandle) {
                 )
             })
             .collect();
-        let _ = app
-            .notification()
-            .builder()
-            .title("BurnBar usage milestone")
-            .body(lines.join("\n"))
-            .show();
-        if !native_notices {
+        if native_notices {
+            let _ = app
+                .notification()
+                .builder()
+                .title("BurnBar usage milestone")
+                .body(lines.join("\n"))
+                .show();
+        } else {
             show_popup(app, popup_seconds);
         }
     }
@@ -417,15 +421,31 @@ fn refresh(app: &AppHandle) {
 }
 
 fn start_scheduler(app: AppHandle) {
+    let (tx, rx) = mpsc::sync_channel(1);
+    if let Ok(mut wake) = app.state::<AppState>().scheduler_wake.lock() {
+        *wake = Some(tx);
+    }
     std::thread::spawn(move || loop {
         let minutes = app
             .state::<AppState>()
             .service()
             .map(|service| service.config.interval_minutes.max(1) as u64)
             .unwrap_or(3);
-        std::thread::sleep(Duration::from_secs(minutes * 60));
-        refresh(&app);
+        match rx.recv_timeout(Duration::from_secs(minutes * 60)) {
+            Err(mpsc::RecvTimeoutError::Timeout) => refresh(&app),
+            Ok(()) => continue,
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
     });
+}
+
+fn wake_scheduler(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    if let Ok(wake) = state.scheduler_wake.lock() {
+        if let Some(tx) = wake.as_ref() {
+            let _ = tx.try_send(());
+        }
+    };
 }
 
 fn start_update_check(app: AppHandle) {
@@ -477,17 +497,24 @@ fn save_settings(
     state: State<'_, AppState>,
     settings: Settings,
 ) -> Result<UiState, String> {
-    let (snapshot, autostart, hotkey) = {
+    let (snapshot, autostart, hotkey, providers_changed) = {
         let mut service = state.service()?;
+        let old_providers = service.config.providers.clone();
         service.apply_settings(settings)?;
         let autostart = service.config.start_with_windows.unwrap_or(true);
         let hotkey = service.config.hotkey;
-        (service.snapshot(), autostart, hotkey)
+        let providers_changed = service.config.providers != old_providers;
+        (service.snapshot(), autostart, hotkey, providers_changed)
     };
     apply_autostart(&app, autostart);
     apply_hotkey(&app, hotkey);
     set_milestone_check(&app, snapshot.config.milestone_popups);
+    wake_scheduler(&app);
     let _ = app.emit("state-changed", &snapshot);
+    if providers_changed {
+        let handle = app.clone();
+        std::thread::spawn(move || refresh(&handle));
+    }
     Ok(snapshot)
 }
 
@@ -503,6 +530,9 @@ fn set_provider_mode(
         service.snapshot()
     };
     let _ = app.emit("state-changed", &snapshot);
+    wake_scheduler(&app);
+    let handle = app.clone();
+    std::thread::spawn(move || refresh(&handle));
     Ok(snapshot)
 }
 

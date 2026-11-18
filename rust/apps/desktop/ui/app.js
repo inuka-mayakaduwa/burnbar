@@ -427,7 +427,6 @@ function fillSettings(settings) {
     "alerts",
     "nativeNotices",
     "quietHours",
-    "respectWindowsQuiet",
     "startWithWindows",
     "showForecast",
     "checkUpdates",
@@ -461,7 +460,9 @@ function collectSettings() {
     alerts: form.alerts.checked,
     nativeNotices: form.nativeNotices.checked,
     quietHours: form.quietHours.checked,
-    respectWindowsQuiet: form.respectWindowsQuiet.checked,
+    // Tauri delegates Focus / Do Not Disturb policy to native notifications.
+    // Preserve the Go-only preference without exposing a non-functional control.
+    respectWindowsQuiet: state?.settings?.respectWindowsQuiet ?? true,
     startWithWindows: form.startWithWindows.checked,
     showForecast: form.showForecast.checked,
     // The Tauri window always uses the compact card layout; keep the stored

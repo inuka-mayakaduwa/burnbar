@@ -15,6 +15,15 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
+const INITIAL_RATE_LIMIT_BACKOFF_SECS: i64 = 2 * 60;
+const MAX_RATE_LIMIT_BACKOFF_SECS: i64 = 16 * 60;
+
+#[derive(Clone, Copy, Debug)]
+struct Cooldown {
+    until: DateTime<Utc>,
+    backoff_secs: i64,
+}
+
 /// Settings the UI is allowed to edit. Internal state (`milestoneState`,
 /// `alertState`) is never replaced by a settings save.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -143,6 +152,7 @@ pub struct Service {
     pub config: Config,
     usages: BTreeMap<Provider, Usage>,
     histories: BTreeMap<Provider, History>,
+    cooldowns: BTreeMap<Provider, Cooldown>,
     first_run: bool,
     demo: bool,
 }
@@ -161,6 +171,7 @@ impl Service {
             config,
             usages: BTreeMap::new(),
             histories,
+            cooldowns: BTreeMap::new(),
             first_run,
             demo: false,
         }
@@ -214,28 +225,64 @@ impl Service {
     where
         F: Fn(Provider) -> Usage + Sync,
     {
-        let providers = self.config.providers();
+        let now = Utc::now();
+        let providers: Vec<Provider> = self
+            .config
+            .providers()
+            .into_iter()
+            .filter(|provider| {
+                self.cooldowns
+                    .get(provider)
+                    .map_or(true, |cooldown| cooldown.until <= now)
+            })
+            .collect();
         let fetched: Vec<Usage> = std::thread::scope(|scope| {
             let handles: Vec<_> = providers
                 .iter()
-                .map(|provider| scope.spawn(|| fetch(*provider)))
+                .map(|provider| (*provider, scope.spawn(|| fetch(*provider))))
                 .collect();
             handles
                 .into_iter()
-                .map(|handle| {
+                .map(|(provider, handle)| {
                     handle
                         .join()
-                        .unwrap_or_else(|_| Usage::failed(Provider::Claude, "usage fetch panicked"))
+                        .unwrap_or_else(|_| Usage::failed(provider, "usage fetch panicked"))
                 })
                 .collect()
         });
 
         let mut report = RefreshReport::default();
-        let now = Utc::now();
         let mut config_changed = false;
 
-        for usage in fetched {
+        for mut usage in fetched {
             let provider = usage.provider;
+            if usage.rate_limited {
+                let previous_backoff = self
+                    .cooldowns
+                    .get(&provider)
+                    .map(|cooldown| cooldown.backoff_secs)
+                    .unwrap_or(0);
+                let backoff_secs = if previous_backoff == 0 {
+                    INITIAL_RATE_LIMIT_BACKOFF_SECS
+                } else {
+                    (previous_backoff * 2).min(MAX_RATE_LIMIT_BACKOFF_SECS)
+                };
+                let fallback = now + chrono::Duration::seconds(backoff_secs);
+                let until = usage
+                    .retry_at
+                    .filter(|at| *at > fallback)
+                    .unwrap_or(fallback);
+                usage.retry_at = Some(until);
+                self.cooldowns.insert(
+                    provider,
+                    Cooldown {
+                        until,
+                        backoff_secs,
+                    },
+                );
+            } else {
+                self.cooldowns.remove(&provider);
+            }
             let previous = self.usages.get(&provider);
             let preserved = usage::preserve_last_good(usage, previous);
             let healthy = preserved.err.is_empty() && !preserved.rate_limited;
@@ -558,6 +605,36 @@ mod tests {
             .providers
             .iter()
             .all(|p| p.health == "Offline / connection error"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rate_limit_cooldown_skips_repeated_provider_calls() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let dir = temp_dir("rate-limit");
+        let mut service = Service::new(&dir);
+        service.config.providers = "claude".into();
+        let calls = AtomicUsize::new(0);
+        let rate_limited = |provider| {
+            calls.fetch_add(1, Ordering::SeqCst);
+            Usage {
+                provider,
+                err: "usage API rate limited, backing off".into(),
+                rate_limited: true,
+                ..Usage::new(provider)
+            }
+        };
+
+        let first = service.refresh_with(rate_limited);
+        assert_eq!(first.fetched.len(), 1);
+        assert!(first.fetched[0].retry_at > Some(Utc::now()));
+        let second = service.refresh_with(rate_limited);
+        assert!(
+            second.fetched.is_empty(),
+            "cooldown must suppress another call"
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
