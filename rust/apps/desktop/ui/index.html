@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>BurnBar</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-tail="bottom">
+    <main id="compact-popup" class="compact-popup" aria-label="BurnBar usage">
+      <div id="compact-providers" class="compact-providers" aria-live="polite">
+        <p class="loading">Loading usage…</p>
+      </div>
+      <footer class="compact-footer">
+        <span>Auto closes · right-click the tray icon for options</span>
+      </footer>
+    </main>
+    <dialog id="about-dialog" class="sheet about" aria-labelledby="about-title">
+      <header class="sheet-header">
+        <h2 id="about-title">BurnBar</h2>
+        <button type="button" class="icon-button" id="about-close" aria-label="Close about">×</button>
+      </header>
+      <div class="sheet-body">
+        <img src="logo.png" alt="" width="64" height="64" class="about-logo" />
+        <p><strong>Claude, Codex, OpenCode and Cursor usage at a glance.</strong></p>
+        <p class="muted">One Rust core, one Tauri shell, every desktop platform. Your readings stay on this computer.</p>
+        <p class="muted" id="about-version"></p>
+        <div class="button-row">
+          <button type="button" class="secondary" id="open-releases">Release notes</button>
+          <button type="button" class="secondary" id="open-repo">Repository</button>
+        </div>
+        <p class="muted small">Unofficial community project, not affiliated with or endorsed by Anthropic or OpenAI.</p>
+      </div>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <script src="app.js"></script>
+  </body>
+</html>

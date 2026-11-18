@@ -1,86 +1,76 @@
 # Contributing to BurnBar
 
-Contributors are welcome. Bug fixes, clearer documentation, accessibility
-improvements, and additional AI tool integrations are all useful contributions.
-
-## Start here
-
-Search [existing issues](https://github.com/nooblk-98/burnbar/issues) before
-starting work. For a larger change, open an issue to agree on the behavior and
-scope before implementing it. The [roadmap](ROADMAP.md) describes current priorities.
-
-Use the [bug report form](https://github.com/nooblk-98/burnbar/issues/new?template=01-bug-report.yml)
-for problems and the [AI tool request form](https://github.com/nooblk-98/burnbar/issues/new?template=02-ai-tool-request.yml)
-for new providers. General suggestions can use a blank issue.
+Bug fixes, provider integrations, accessibility improvements and documentation
+fixes are welcome. Search [existing issues](https://github.com/nooblk-98/burnbar/issues)
+before starting; for a larger change, open an issue to agree on scope first.
 
 ## Set up a development build
 
-Use Windows 10 or 11, Git, and Go 1.26 or newer. Fork the repository, clone your
-fork, and create a branch for your change:
+You need [Rust 1.80+](https://rustup.rs/). On Linux install WebKitGTK and
+AppIndicator:
 
-```powershell
-git clone https://github.com/YOUR-USERNAME/burnbar.git
-cd burnbar
-git switch -c fix/describe-your-change
-go mod download
-go build -o bin/burnbar-dev.exe ./cmd/burnbar
-.\bin\burnbar-dev.exe -demo -providers both
+```bash
+sudo apt install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
 ```
 
-Demo mode supplies sample readings without fetching provider usage or writing
-usage history or advancing/saving alert baselines. Settings are still loaded from
-your normal BurnBar profile; explicit settings edits can be saved.
-Only one BurnBar instance can run at a time, so exit the existing meter first.
-Use a real provider login only when testing behavior that requires one.
+```bash
+git clone https://github.com/nooblk-98/burnbar.git
+cd burnbar/rust
+cargo run -p burnbar-desktop -- --demo
+```
 
-The normal `build.ps1` script also runs checks and creates a console-free build.
-It stops a running BurnBar process before replacing the executable. Add
-`-Resources` only when you need to regenerate the embedded icon, manifest, or
-version resource.
+`--demo` shows sample data for every provider and writes nothing; real usage
+needs the matching local login. `--providers claude|codex|opencode|cursor|both|all`
+limits one run without saving the choice, and `--hidden` starts in the tray.
+
+The portable logic is in `rust/crates/burnbar-core`; the Tauri shell and UI are
+in `rust/apps/desktop`. Do not add a platform-specific copy of a feature: use a
+Tauri API or plugin so Windows, macOS and Linux share the code. Keep provider
+access read-only and never commit credentials or personal usage responses.
 
 ## Check your change
 
-Format the Go files you changed with `gofmt`, then run:
-
-```powershell
-go vet ./...
-go build ./...
+```bash
+cd rust
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+./scripts/smoke.sh        # real binary, headless, demo data
 ```
 
-Test sources are kept locally and ignored by Git. Run any local tests you maintain
-before submitting a change, and include the results in your pull request.
+Add tests for parsing, credential-store reads, milestones, quiet hours or
+forecasts when changing them. For UI changes, check light and dark themes, the
+125% and 150% text sizes, and a window resized to the minimum dimensions.
 
-For UI changes, check both light and dark themes, display scaling, and the
-notification-area placement. Check automatic and manual popup expiry at different
-close delays, tooltip suppression/restoration, Search/Start, fullscreen apps and
-notification icons moved into or out of the overflow area.
-Use local regression checks for behavior changes where they can catch the original bug.
-Documentation-only changes need a review of links, examples, and formatting.
+## Project skills
 
-Use demo mode for public screenshots. Never commit credentials, personal usage
-responses, session logs, or account identifiers. See [PRIVACY.md](PRIVACY.md).
+Optional agent skills are pinned under `.agents/skills` (`skills-lock.json`):
+skill discovery, Tauri, Rust best practices, frontend design and codebase
+cleanup. They are documentation for coding agents and do not affect the build.
 
-## Add an AI tool integration
+```bash
+npx skills find <query>
+npx skills experimental_install
+npx skills update
+```
 
-Start with a [provider request](https://github.com/nooblk-98/burnbar/issues/new?template=02-ai-tool-request.yml)
-describing the tool, account type, quota windows, and any official API or CLI.
-An integration needs a reliable, permitted way to read usage and clear handling
-of missing login, unavailable quotas, timeouts, and rate limits.
+Review a skill before use; skills run with the agent's permissions.
 
-Provider fetching and parsing live in `internal/usage`. Keep parsing separate
-from network or process access so it can be tested using synthetic fixtures.
-The shared `usage.Usage` and `usage.Window` types feed rendering and history.
-Check provider selection, menus, refresh/backoff state, milestone windows, and separate
-history storage when adding another provider; registration is currently explicit
-across those areas. Use reported quota durations and reset times when available.
+## Add a provider
 
-Reuse a provider's existing authenticated CLI or supported account mechanism
-where practical. Document all new data access and network behavior in
-[PRIVACY.md](PRIVACY.md). Do not submit real tokens or private account fixtures.
+Provider fetchers live in `rust/crates/burnbar-core/src/`. Keep three things
+separate:
 
-## Submit a pull request
+1. Reading the provider's local credential material (read-only).
+2. Fetching and decoding usage (no UI or OS dependencies).
+3. Mapping the result to `Usage` / `Window` so history, milestones, alerts and
+   forecasts work without provider-specific code.
 
-Explain the problem, resulting behavior, and checks you ran. Link the related
-issue and include demo screenshots for visual changes. Keep unrelated changes
-in separate pull requests. Contributions are made under the repository's
-[MIT license](LICENSE).
+Read stores through `dirs` or an environment override, never a hard-coded
+platform path. Add a parser test, a mocked-HTTP test, and a credential-store test
+where applicable. Document new network or local-data access in
+[PRIVACY.md](PRIVACY.md).
+
+## Releasing
+
+See [docs/RELEASING.md](docs/RELEASING.md).
