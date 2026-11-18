@@ -177,10 +177,27 @@ body[data-tail="top"] .compact-popup::after {
   color: var(--text);
 }
 
-.provider-logo svg {
+.provider-logo img {
   width: 100%;
   height: 100%;
+  object-fit: contain;
 }
+
+.provider-logo-opencode {
+  background: currentColor;
+  -webkit-mask: url("logos/opencode-mono.svg") center / contain no-repeat;
+  mask: url("logos/opencode-mono.svg") center / contain no-repeat;
+}
+
+.logo-dark { display: none; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .logo-light { display: none; }
+  :root:not([data-theme="light"]) .logo-dark { display: inline; }
+}
+
+:root[data-theme="dark"] .logo-light { display: none; }
+:root[data-theme="dark"] .logo-dark { display: inline; }
 
 .compact-provider-head strong {
   overflow: hidden;
