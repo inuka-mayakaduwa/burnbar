@@ -67,6 +67,10 @@ The installer downloads the checksum-verified build for your platform from
 GitHub Releases. Use `npx --yes burnbar@latest update` to update. Development
 builds use `--channel development`. Neither command enables an automatic updater.
 
+To uninstall, run `npx --yes burnbar@latest uninstall`. It stops BurnBar and removes
+the app, shortcuts and start-on-login entry. Your settings and history are kept
+unless you add `--purge`.
+
 | Platform | What gets installed | Where |
 | --- | --- | --- |
 | Windows 10/11 x64 | `burnbar.exe` | `%LOCALAPPDATA%\Programs\BurnBar` |
