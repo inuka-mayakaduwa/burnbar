@@ -157,8 +157,10 @@ async function run(options, runtime = {}) {
 function uninstall(options, runtime = {}) {
   const { kind } = target(runtime.platform, runtime.arch);
   const home = runtime.home || os.homedir();
+  const dry = Boolean(options.dryRun);
   const remove = (p, recursive = false) => {
     if (!fs.existsSync(p) && !isLink(p)) return false;
+    if (dry) { console.log(`Would remove ${p}`); return true; }
     fs.rmSync(p, { recursive, force: true });
     console.log(`Removed ${p}`);
     return true;
@@ -166,22 +168,25 @@ function uninstall(options, runtime = {}) {
   const isLink = (p) => { try { return fs.lstatSync(p).isSymbolicLink(); } catch { return false; } };
   let removed = false;
   let settings;
+  if (kind === 'linux' && fs.existsSync('/var/lib/dpkg/info/burnbar.list')) {
+    console.log('Note: a .deb copy is also installed. Remove it with: sudo apt remove burnbar');
+  }
   if (kind === 'linux') {
     const dir = options.installDir || path.join(home, '.local', 'share', 'BurnBar');
-    spawnSync('pkill', ['-f', path.join(dir, 'BurnBar.AppImage')]);
+    if (!dry) spawnSync('pkill', ['-f', path.join(dir, 'BurnBar.AppImage')]);
     // Only the files the installer creates, never the whole directory tree.
     for (const name of ['BurnBar.AppImage', '.version', 'burnbar.png']) removed = remove(path.join(dir, name)) || removed;
-    try { fs.rmdirSync(dir); } catch { /* not empty or missing */ }
+    if (!dry) { try { fs.rmdirSync(dir); } catch { /* not empty or missing */ } }
     const bin = path.join(home, '.local', 'bin', 'burnbar');
     if (isLink(bin) && fs.readlinkSync(bin) === path.join(dir, 'BurnBar.AppImage')) removed = remove(bin) || removed;
     removed = remove(path.join(home, '.local', 'share', 'applications', 'burnbar.desktop')) || removed;
     remove(path.join(home, '.config', 'autostart', 'BurnBar.desktop'));
-    settings = path.join(process.env.XDG_CONFIG_HOME || path.join(home, '.config'), 'BurnBar');
+    settings = path.join((runtime.env || process.env).XDG_CONFIG_HOME || path.join(home, '.config'), 'BurnBar');
   } else {
     const app = path.join(options.installDir || path.join(home, 'Applications'), 'BurnBar.app');
-    spawnSync('pkill', ['-f', `${app}/Contents/MacOS/`]);
+    if (!dry) spawnSync('pkill', ['-f', `${app}/Contents/MacOS/`]);
     removed = remove(app, true);
-    remove(path.join(home, 'Library', 'LaunchAgents', 'BurnBar.plist'));
+    for (const label of ['BurnBar', 'com.nooblk.burnbar']) remove(path.join(home, 'Library', 'LaunchAgents', `${label}.plist`));
     settings = path.join(home, 'Library', 'Application Support', 'BurnBar');
   }
   if (options.purge) {
@@ -189,6 +194,7 @@ function uninstall(options, runtime = {}) {
   } else if (fs.existsSync(settings)) {
     console.log(`Settings and history were kept in ${settings}. Use --purge to delete them.`);
   }
+  if (dry) { console.log('Dry run: nothing changed.'); return 0; }
   console.log(removed ? 'BurnBar has been uninstalled.' : 'BurnBar was not found; nothing to uninstall.');
   return 0;
 }

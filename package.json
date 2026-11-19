@@ -26,5 +26,8 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "scripts": {
+    "test": "node --test npm/test/uninstall.test.cjs"
   }
 }
